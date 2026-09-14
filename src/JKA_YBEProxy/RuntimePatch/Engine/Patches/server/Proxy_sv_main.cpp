@@ -202,14 +202,8 @@ void Proxy_SV_ConnectionlessPacket(netadr_t from, msg_t* msg) {
 		// sequenced messages to the old client
 	}
 	else {
-		// JA+ client plugin / addon may use custom OOB commands.
-		// Passthrough unknown strings to the original handler instead of dropping,
-		// or we break the addon.
-		if (proxy.isJAPlus && Original_SV_ConnectionlessPacket)
-		{
-			Original_SV_ConnectionlessPacket(from, msg);
-			return;
-		}
+		// Block default-deny: unknown OOB is dropped for base and JA+ alike.
+		// Anything we can't explicitly handle/patch must not reach the engine.
 		if (server.common.cvars.com_developer->integer) {
 			server.common.functions.Com_Printf("bad connectionless packet from %s:\n%s\n",
 				server.common.functions.NET_AdrToString(from), s);
