@@ -416,3 +416,6 @@ MigrationBackup/
 build/
 build64/
 build_linux/
+
+# Local nested JA+ proxy checkout (separate repo, never commit here)
+japlusproxy/
