@@ -127,7 +127,8 @@ void (*Original_SVC_RemoteCommand)(netadr_t, msg_t*);
 void Proxy_SVC_RemoteCommand(netadr_t from, msg_t* msg) {
 	static unsigned int commandCoolDown = 0;
 
-	if (proxy.originalEngineCvars.proxy_sv_enableRconCmdCooldown.integer && (unsigned int)server.svs->time < commandCoolDown + 500) {
+	// JA+ admin tools send rapid rcon; YBE's global cooldown breaks them. Skip it for JA+.
+	if (!proxy.isJAPlus && proxy.originalEngineCvars.proxy_sv_enableRconCmdCooldown.integer && (unsigned int)server.svs->time < commandCoolDown + 500) {
 		return;
 	}
 
@@ -201,6 +202,14 @@ void Proxy_SV_ConnectionlessPacket(netadr_t from, msg_t* msg) {
 		// sequenced messages to the old client
 	}
 	else {
+		// JA+ client plugin / addon may use custom OOB commands.
+		// Passthrough unknown strings to the original handler instead of dropping,
+		// or we break the addon.
+		if (proxy.isJAPlus && Original_SV_ConnectionlessPacket)
+		{
+			Original_SV_ConnectionlessPacket(from, msg);
+			return;
+		}
 		if (server.common.cvars.com_developer->integer) {
 			server.common.functions.Com_Printf("bad connectionless packet from %s:\n%s\n",
 				server.common.functions.NET_AdrToString(from), s);
