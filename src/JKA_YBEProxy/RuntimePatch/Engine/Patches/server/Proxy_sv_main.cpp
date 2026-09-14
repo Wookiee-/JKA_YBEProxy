@@ -4,6 +4,143 @@
 #include "sdk/game/g_public.hpp"
 #include "Proxy_sv_main.hpp"
 
+#include <cstring>
+
+/*
+===================
+YBE OOB rate limiter (works with YBE, base + JA+)
+
+Stock engine has no throttling for connectionless packets, so spoofed
+getstatus/getinfo/connect/rcon floods each cost a full handler run.
+This is a small per-IP + global leaky bucket run inside YBE's own
+SV_ConnectionlessPacket detour, before any handler runs.
+
+- Engine packet handling is single-threaded, no locks needed.
+- Loopback (local tools/rcon) is exempt.
+- Fail closed on bad clock, fail open only when the server clock isn't up yet.
+===================
+*/
+
+namespace
+{
+	struct OOBBucket_t
+	{
+		byte	ip[4];
+		int		lastTime;
+		int		burst;
+		qboolean used;
+	};
+
+	constexpr int OOB_BUCKETS = 256;
+	// Per-IP: 10/sec sustained, burst 10. Global: 100/sec sustained, burst 100.
+	constexpr int OOB_IP_PERIOD = 100;
+	constexpr int OOB_IP_BURST = 10;
+	constexpr int OOB_GLOBAL_PERIOD = 10;
+	constexpr int OOB_GLOBAL_BURST = 100;
+
+	OOBBucket_t oobBuckets[OOB_BUCKETS] = {};
+	int oobGlobalBurst = 0;
+	int oobGlobalLast = 0;
+	int oobDropped = 0;
+	int oobLastLog = 0;
+
+	bool OOB_RateLimit(int* burst, int* lastTime, int maxBurst, int period, int now)
+	{
+		int interval;
+		int expired;
+
+		if (!burst || !lastTime || period <= 0 || maxBurst <= 0)
+			return false;
+
+		if (now < *lastTime)
+		{
+			*burst = 0;
+			*lastTime = now;
+			return false;
+		}
+
+		interval = now - *lastTime;
+		expired = interval / period;
+
+		if (expired > *burst)
+		{
+			*burst = 0;
+			*lastTime = now;
+		}
+		else
+		{
+			*burst -= expired;
+			*lastTime = now - (interval % period);
+		}
+
+		if (*burst < maxBurst)
+		{
+			(*burst)++;
+			return false;
+		}
+
+		return true;
+	}
+
+	OOBBucket_t* OOB_BucketFor(const byte ip[4])
+	{
+		int victim = 0;
+		int oldest = 0;
+		bool foundFree = false;
+
+		for (int i = 0; i < OOB_BUCKETS; i++)
+		{
+			if (oobBuckets[i].used)
+			{
+				if (!std::memcmp(oobBuckets[i].ip, ip, 4))
+					return &oobBuckets[i];
+
+				if (oobBuckets[i].lastTime < oobBuckets[oldest].lastTime)
+					oldest = i;
+			}
+			else if (!foundFree)
+			{
+				victim = i;
+				foundFree = true;
+			}
+		}
+
+		if (!foundFree)
+			victim = oldest;
+
+		std::memset(&oobBuckets[victim], 0, sizeof(oobBuckets[victim]));
+		std::memcpy(oobBuckets[victim].ip, ip, 4);
+		oobBuckets[victim].used = qtrue;
+
+		return &oobBuckets[victim];
+	}
+
+	bool OOB_ShouldDrop(const netadr_t from, int now)
+	{
+		OOBBucket_t* bucket;
+
+		if (from.type == NA_LOOPBACK)
+			return false;
+
+		if (from.type != NA_IP)
+			return false;
+
+		// Local tools exemption (127.0.0.1).
+		if (from.ip[0] == 127 && from.ip[1] == 0 && from.ip[2] == 0 && from.ip[3] == 1)
+			return false;
+
+		bucket = OOB_BucketFor(from.ip);
+
+		if (OOB_RateLimit(&bucket->burst, &bucket->lastTime, OOB_IP_BURST, OOB_IP_PERIOD, now))
+			return true;
+
+		if (OOB_RateLimit(&oobGlobalBurst, &oobGlobalLast, OOB_GLOBAL_BURST, OOB_GLOBAL_PERIOD, now))
+			return true;
+
+		return false;
+	}
+}
+
 /*
 ===================
 SV_CalcPings
@@ -161,6 +298,25 @@ void (*Original_SV_ConnectionlessPacket)(netadr_t, msg_t*);
 void Proxy_SV_ConnectionlessPacket(netadr_t from, msg_t* msg) {
 	char* s;
 	char* c;
+	int now;
+
+	// YBE OOB bucket: drop floods before they cost a handler run. Same for base + JA+.
+	// Fail open only while the server clock isn't up yet.
+	if (server.svs)
+	{
+		now = server.svs->time;
+		if (now != 0 && OOB_ShouldDrop(from, now))
+		{
+			oobDropped++;
+			if (oobLastLog + 5000 < now)
+			{
+				server.common.functions.Com_Printf("OOB rate limit: dropped %d connectionless requests\n", oobDropped);
+				oobLastLog = now;
+				oobDropped = 0;
+			}
+			return;
+		}
+	}
 
 	server.common.functions.MSG_BeginReadingOOB(msg);
 	server.common.functions.MSG_ReadLong(msg);		// skip the -1 marker
