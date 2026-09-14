@@ -85,9 +85,23 @@ Q_CABI Q_EXPORT intptr_t vmMain(intptr_t command, intptr_t arg0, intptr_t arg1, 
 				proxy.isOriginalEngine = true;
 			}
 
+			// JA+ runs as fs_game japlus with its own modVersion (e.g. "JA+ Mod v2.4 Build 7").
+			// When present we must stay passive: JA+ owns names/models/sabers/admin (am*) flow.
+			char fs_game[MAX_OSPATH] = { 0 };
+			char modVersion[MAX_STRING_CHARS] = { 0 };
+
+			proxy.trap->Cvar_VariableStringBuffer(FS_GAME_CVAR, fs_game, sizeof(fs_game));
+			proxy.trap->Cvar_VariableStringBuffer("modVersion", modVersion, sizeof(modVersion));
+
+			if (!Q_stricmpn(fs_game, "japlus", 6) || Q_stristr(modVersion, "JA+"))
+			{
+				proxy.isJAPlus = true;
+				proxy.trap->Print("----- Proxy: JA+ mod detected (fs_game=%s modVersion=%s), enabling JA+ compatibility mode\n", fs_game, modVersion);
+			}
+
 			if (proxy.isOriginalEngine)
 			{
-				proxy.trap->Print("----- Proxy: Original engine detected\n");
+				proxy.trap->Print("----- Proxy: Original engine detected%s\n", proxy.isJAPlus ? " (JA+ compat mode, detours JA+-aware)" : "");
 
 				Proxy_Engine_Initialize_MemoryLayer();
 				Proxy_OriginalEngine_CVars_Registration();

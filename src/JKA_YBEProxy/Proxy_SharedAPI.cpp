@@ -81,6 +81,13 @@ qboolean Proxy_SharedAPI_ClientCommand(int clientNum)
 		return qfalse;
 	}
 
+	// JA+ owns its admin flow (am* + jp_* votes/teams). Let it through untouched
+	// or we break the addon; only generic anti-crash below still applies.
+	if (proxy.isJAPlus && !Q_stricmpn(cmd, "am", 2))
+	{
+		return qtrue;
+	}
+
 	// Todo (not sure): Check in the entier command + args?
 	const char* argsConcat = ConcatArgs(1);
 
@@ -115,6 +122,9 @@ qboolean Proxy_SharedAPI_ClientCommand(int clientNum)
 		return qfalse;
 	}
 
+	// JA+ owns teams/votes/kill flow (jp_* cvars). Skip YBE baseJKA rules or we break the addon.
+	if (!proxy.isJAPlus)
+	{
 	// Fix: team crash
 	if (!Q_stricmpn(cmd, "team", 4) && (!Q_stricmpn(cmd_arg1, "follow1", 7) || !Q_stricmpn(cmd_arg1, "follow2", 7)))
 	{
@@ -191,6 +201,7 @@ qboolean Proxy_SharedAPI_ClientCommand(int clientNum)
 			return qfalse;
 		}
 	}
+	} // !isJAPlus
 
 	if (Q_strchrs(argsConcat, "\r\n"))
 	{
@@ -240,12 +251,21 @@ void Proxy_SharedAPI_ClientUserinfoChanged(int clientNum)
 		return;
 	}
 
+	ClientData_t *currentClientData = &proxy.clientData[clientNum];
+
+	// JA+ owns names/models/sabers/siege/plugin keys (clan tags, RGB, scale, antiHack).
+	// Don't rewrite userinfo here or we break the addon; only track a clean name for our own messages.
+	if (proxy.isJAPlus)
+	{
+		const char* val = Info_ValueForKey(userinfo, "name");
+		Proxy_ClientCleanName(val, currentClientData->cleanName, sizeof(currentClientData->cleanName));
+		return;
+	}
+
 	std::size_t len = 0;
 	const char* val = NULL;
 
 	val = Info_ValueForKey(userinfo, "name");
-
-	ClientData_t *currentClientData = &proxy.clientData[clientNum];
 
 	// Fix bad names
 	Proxy_ClientCleanName(val, currentClientData->cleanName, sizeof(currentClientData->cleanName));

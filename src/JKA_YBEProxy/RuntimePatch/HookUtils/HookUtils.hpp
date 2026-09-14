@@ -96,6 +96,12 @@ namespace HookUtils {
 	{
 		hookEntry.savedOpcodeLength = GetLen(hookEntry.originalFunctionAddr);
 
+		// Fail closed on bad detour area (GetLen==0 or <5 would split instructions).
+		if (hookEntry.savedOpcodeLength < 5)
+		{
+			return false;
+		}
+
 		// get the real address of the function ptr where we want to store the trampoline
 		*hookEntry.originalRedirectedFunctionPtr = GetTramp(hookEntry);
 

@@ -41,7 +41,9 @@ static qboolean Proxy_SV_ClientCommand(client_t* cl, msg_t* msg) {
 	// but not other people
 	// We don't do this when the client hasn't been active yet since its
 	// normal to spam a lot of commands when downloading
-	if (!server.common.cvars.com_cl_running->integer &&
+	// JA+ has its own spam controls (jp_userInfoAntiSpam, jp_hookFloodProtect).
+	// YBE's 1 cmd/sec gate breaks admin/plugin chatter, so skip it for JA+.
+	if (!proxy.isJAPlus && !server.common.cvars.com_cl_running->integer &&
 		cl->state >= CS_ACTIVE &&
 		server.cvars.sv_floodProtect->integer &&
 		server.svs->time < cl->nextReliableTime) {
@@ -51,8 +53,9 @@ static qboolean Proxy_SV_ClientCommand(client_t* cl, msg_t* msg) {
 		//return qfalse;	// stop processing
 	}
 
-	// don't allow another command for one second
-	cl->nextReliableTime = server.svs->time + 1000;
+	// don't allow another command for one second (baseJKA only, breaks JA+ addon)
+	if (!proxy.isJAPlus)
+		cl->nextReliableTime = server.svs->time + 1000;
 
 	server.functions.SV_ExecuteClientCommand(cl, s, clientOk);
 
@@ -326,7 +329,9 @@ void Proxy_SV_SendClientGameState(client_t* client)
 	server.common.functions.Com_DPrintf("Going from CS_CONNECTED to CS_PRIMED for %s\n", client->name);
 	
 	// Proxy -------------->
-	if (client->state == CS_CONNECTED)
+	// baseJKA fast-path: force PRIMED so retransmit logic stays simple.
+	// JA+ owns its dimension/state flow (altDim etc.), don't force it.
+	if (!proxy.isJAPlus && client->state == CS_CONNECTED)
 	{
 		client->state = CS_PRIMED;
 	}
@@ -457,6 +462,13 @@ into a more C friendly form.
 */
 void (*Original_SV_UserinfoChanged)(client_t*);
 void Proxy_SV_UserinfoChanged(client_t* cl) {
+	// JA+ owns models (jp_antiHackModel, RGB, scale). Don't force kyle or we break the addon.
+	if (proxy.isJAPlus)
+	{
+		Original_SV_UserinfoChanged(cl);
+		return;
+	}
+
 	const char* val = nullptr;
 
 	val = Info_ValueForKey(cl->userinfo, "model");
@@ -485,6 +497,13 @@ SV_BeginDownload_f
 void (*Original_SV_BeginDownload_f)(client_t*);
 void Proxy_SV_BeginDownload_f(client_t* cl)
 {
+	// JA+ uses URL redirect (jp_DlBaseURL), not engine pk3 downloads. Passthrough or we break it.
+	if (proxy.isJAPlus)
+	{
+		Original_SV_BeginDownload_f(cl);
+		return;
+	}
+
 	if (cl->state == CS_ACTIVE)
 		return;
 	

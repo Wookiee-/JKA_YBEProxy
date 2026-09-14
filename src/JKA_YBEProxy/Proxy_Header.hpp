@@ -170,6 +170,7 @@ struct Proxy_t
 	gameExport_t*			copyOpenJKAPIGameExportTable;
 
 	bool					isOriginalEngine;
+	bool					isJAPlus;
 
 	ProxyData_t				proxyData;
 	LocatedGameData_t		locatedGameData;
