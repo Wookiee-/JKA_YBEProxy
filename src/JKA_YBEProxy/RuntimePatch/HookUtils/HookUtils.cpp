@@ -76,14 +76,17 @@ namespace HookUtils {
 		std::size_t iLen = 0;
 		std::size_t iSize = 0;
 		HDE dummy;
+		unsigned char* cur = pAddress;
 
 		while (iSize < 5)
 		{
-			iLen = HDE_DISASM(pAddress, &dummy);
+			iLen = HDE_DISASM(cur, &dummy);
 			// Fail closed: bad detour area must never plant a split-instruction hook.
-			if (iLen == 0)
+			// Also reject relative call/jmp in stolen bytes: the trampoline copy
+			// would point at the wrong target (mod-safe, silent, no logs).
+			if (iLen == 0 || (dummy.flags & F_ERROR) || (dummy.flags & F_RELATIVE))
 				return 0;
-			pAddress += iLen;
+			cur += iLen;
 			iSize += iLen;
 			// Sanity: a single prologue should never need this much to reach 5 bytes.
 			if (iSize > 64)

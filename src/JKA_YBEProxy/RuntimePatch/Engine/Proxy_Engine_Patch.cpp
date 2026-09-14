@@ -94,9 +94,17 @@ void Proxy_Engine_Detach_Patches(void)
 
 void Proxy_Engine_Inline_Patches(void)
 {
+	// Silent byte checks only (no logs - logging at load lags the server).
+	// Verified against the mod's engine (stock 1.0.1.1): timer block starts
+	// with E8 (call), outputbuf length byte is BF. Skip silently on mismatch.
+	unsigned char* timerAddr = (unsigned char*)func_SVC_RemoteCommand_timer_start_block_addr[PROXY_PLATFORM];
+	unsigned char* lenAddr = (unsigned char*)func_SVC_RemoteCommand_Com_BeginRedirect_SV_OUTPUTBUF_LENGTH_addr[PROXY_PLATFORM];
+
 	// Remove all the timer block in SVC_RemoteCommand, fix rcon disabler
-	HookUtils::Patch_NOP_Bytes((unsigned char*)func_SVC_RemoteCommand_timer_start_block_addr[PROXY_PLATFORM], func_SVC_RemoteCommand_timer_NOP_amount[PROXY_PLATFORM]);
+	if (timerAddr[0] == 0xE8)
+		HookUtils::Patch_NOP_Bytes(timerAddr, func_SVC_RemoteCommand_timer_NOP_amount[PROXY_PLATFORM]);
 	// When calling Com_BeginRedirect in SVC_RemoteCommand, change the length of the buffer from 49136 to 1008
 	// It fix truncated text from SVC_RemoteCommand with the new Com_Printf
-	HookUtils::Patch((unsigned char*)func_SVC_RemoteCommand_Com_BeginRedirect_SV_OUTPUTBUF_LENGTH_addr[PROXY_PLATFORM], 0x03);
+	if (lenAddr[0] == 0xBF)
+		HookUtils::Patch(lenAddr, 0x03);
 }

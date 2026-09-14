@@ -22,6 +22,9 @@ void Proxy_SharedAPI_LocateGameData(sharedEntity_t* gEnts, int numGEntities, int
 
 void Proxy_SharedAPI_GetUsercmd(int clientNum, usercmd_t* ucmd)
 {
+	if (!ucmd || clientNum < 0 || clientNum >= MAX_CLIENTS)
+		return;
+
 	if (ucmd->forcesel == FP_LEVITATION || ucmd->forcesel >= NUM_FORCE_POWERS)
 	{
 		ucmd->forcesel = 0xFFu;
@@ -61,6 +64,9 @@ void Proxy_SharedAPI_ClientBegin(int clientNum, qboolean allowTeamReset)
 
 qboolean Proxy_SharedAPI_ClientCommand(int clientNum)
 {
+	if (clientNum < 0 || clientNum >= MAX_CLIENTS)
+		return qfalse;
+
 	ClientData_t *currentClientData = &proxy.clientData[clientNum];
 
 	if (!currentClientData->isConnected)
@@ -243,6 +249,9 @@ void Proxy_SharedAPI_ClientThink(int clientNum, usercmd_t* ucmd)
 void Proxy_SharedAPI_ClientUserinfoChanged(int clientNum)
 {
 	char userinfo[MAX_INFO_STRING];
+
+	if (clientNum < 0 || clientNum >= MAX_CLIENTS)
+		return;
 	
 	proxy.trap->GetUserinfo(clientNum, userinfo, sizeof(userinfo));
 
