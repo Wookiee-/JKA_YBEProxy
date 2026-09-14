@@ -309,14 +309,6 @@ the wrong gamestate.
 void (*Original_SV_SendClientGameState)(client_t*);
 void Proxy_SV_SendClientGameState(client_t* client)
 {
-	// Diagnostic: JA+ clients stall at awaiting snapshot with YBE's copy.
-	// Passthrough to the real engine version for JA+ to isolate it.
-	if (proxy.isJAPlus && Original_SV_SendClientGameState)
-	{
-		Original_SV_SendClientGameState(client);
-		return;
-	}
-
 	int				start;
 	entityState_t*	base, nullstate;
 	msg_t			msg;
@@ -337,9 +329,9 @@ void Proxy_SV_SendClientGameState(client_t* client)
 	server.common.functions.Com_DPrintf("Going from CS_CONNECTED to CS_PRIMED for %s\n", client->name);
 	
 	// Proxy -------------->
-	// baseJKA fast-path: force PRIMED so retransmit logic stays simple.
-	// JA+ owns its dimension/state flow (altDim etc.), don't force it.
-	if (!proxy.isJAPlus && client->state == CS_CONNECTED)
+	// Match stock: stock forces PRIMED unconditionally (mov [esi],3).
+	// JA+ works with stock behavior (proven by passthrough test), so do the same.
+	if (client->state == CS_CONNECTED)
 	{
 		client->state = CS_PRIMED;
 	}
@@ -384,12 +376,16 @@ void Proxy_SV_SendClientGameState(client_t* client)
 
 	for (start = 0; start < MAX_GENTITIES; start++)
 	{
-		base = &server.sv->svEntities[start].baseline;
-
-		if (!base->number)
+		// Match stock (verified by disasm of 1.0.1.1 @0x804d074): stock tests
+		// the FIRST dword of svEntity_t (worldSector pointer), not
+		// baseline.number. OpenJK-derived !base->number skips worldspawn
+		// (number 0, but linked) and stalls JA+ clients at awaiting snapshot.
+		if (!server.sv->svEntities[start].worldSector)
 		{
 			continue;
 		}
+
+		base = &server.sv->svEntities[start].baseline;
 
 		server.common.functions.MSG_WriteByte(&msg, svc_baseline);
 		server.common.functions.MSG_WriteDeltaEntity(&msg, &nullstate, base, qtrue);
