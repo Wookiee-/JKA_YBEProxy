@@ -309,6 +309,14 @@ the wrong gamestate.
 void (*Original_SV_SendClientGameState)(client_t*);
 void Proxy_SV_SendClientGameState(client_t* client)
 {
+	// Diagnostic: JA+ clients stall at awaiting snapshot with YBE's copy.
+	// Passthrough to the real engine version for JA+ to isolate it.
+	if (proxy.isJAPlus && Original_SV_SendClientGameState)
+	{
+		Original_SV_SendClientGameState(client);
+		return;
+	}
+
 	int				start;
 	entityState_t*	base, nullstate;
 	msg_t			msg;
