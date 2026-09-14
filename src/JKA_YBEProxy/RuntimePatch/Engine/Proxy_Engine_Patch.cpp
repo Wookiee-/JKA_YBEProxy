@@ -54,6 +54,9 @@ static std::variant<
 
 void Proxy_Engine_Attach_Patches(void)
 {
+#if !PROXY_HOOKING_SUPPORTED
+	return;
+#endif
 	for (auto& hookEntry : hookEntries) {
 		std::visit([](auto& hookEntryVisitor) {
 			if (!HookUtils::Attach(hookEntryVisitor))
@@ -75,6 +78,9 @@ void Proxy_Engine_Attach_Patches(void)
 
 void Proxy_Engine_Detach_Patches(void)
 {
+#if !PROXY_HOOKING_SUPPORTED
+	return;
+#endif
 	for (auto& hookEntry : hookEntries) {
 		std::visit([](auto& hookEntryVisitor) {
 			if (!HookUtils::Detach(hookEntryVisitor))
@@ -94,6 +100,9 @@ void Proxy_Engine_Detach_Patches(void)
 
 void Proxy_Engine_Inline_Patches(void)
 {
+#if !PROXY_HOOKING_SUPPORTED
+	return;
+#endif
 	// Silent byte checks only (no logs - logging at load lags the server).
 	// Verified against the mod's engine (stock 1.0.1.1): timer block starts
 	// with E8 (call), outputbuf length byte is BF. Skip silently on mismatch.

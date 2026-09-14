@@ -101,7 +101,7 @@ Q_CABI Q_EXPORT intptr_t vmMain(intptr_t command, intptr_t arg0, intptr_t arg1, 
 				proxy.trap->Print("----- Proxy: JA+ mod detected (fs_game=%s modVersion=%s), enabling JA+ compatibility mode\n", fs_game, modVersion);
 			}
 
-			if (proxy.isOriginalEngine)
+			if (proxy.isOriginalEngine && PROXY_HOOKING_SUPPORTED)
 			{
 				proxy.trap->Print("----- Proxy: Original engine detected%s\n", proxy.isJAPlus ? " (JA+ compat mode, detours JA+-aware)" : "");
 
@@ -122,7 +122,7 @@ Q_CABI Q_EXPORT intptr_t vmMain(intptr_t command, intptr_t arg0, intptr_t arg1, 
 		case GAME_SHUTDOWN: // (int restart)
 		//==================================================
 		{
-			if (proxy.isOriginalEngine)
+			if (proxy.isOriginalEngine && PROXY_HOOKING_SUPPORTED)
 			{
 				// On "rcon map XXX" or "rcon map_restart 0" it directly goes there from SVC_RemoteCommand
 				// the problem here is that Com_EndRedirect() isn't called after the
