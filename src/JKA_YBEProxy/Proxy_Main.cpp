@@ -14,6 +14,8 @@
 #include "Wrappers/Proxy_OpenJKAPI_Wrappers.hpp"
 #include "Wrappers/Proxy_OriginalAPI_Wrappers.hpp"
 
+#include <cstring>
+
 Proxy_t proxy = { 0 };
 
 static void Proxy_GetOriginalGameAPI(void)
@@ -93,7 +95,7 @@ Q_CABI Q_EXPORT intptr_t vmMain(intptr_t command, intptr_t arg0, intptr_t arg1, 
 			proxy.trap->Cvar_VariableStringBuffer(FS_GAME_CVAR, fs_game, sizeof(fs_game));
 			proxy.trap->Cvar_VariableStringBuffer("modVersion", modVersion, sizeof(modVersion));
 
-			if (!Q_stricmpn(fs_game, "japlus", 6) || Q_stristr(modVersion, "JA+"))
+			if (!Q_stricmpn(fs_game, "japlus", 6) || std::strstr(modVersion, "JA+"))
 			{
 				proxy.isJAPlus = true;
 				proxy.trap->Print("----- Proxy: JA+ mod detected (fs_game=%s modVersion=%s), enabling JA+ compatibility mode\n", fs_game, modVersion);
